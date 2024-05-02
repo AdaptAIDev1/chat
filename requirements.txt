@@ -1,0 +1,8 @@
+altair
+numpy
+pandas
+pydeck
+streamlit
+requests
+pyrebase
+OpenAI
