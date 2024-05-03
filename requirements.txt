@@ -2,9 +2,9 @@ altair
 numpy
 pandas
 pydeck
-streamlit==1.17.0
-requests==2.28.1
-firebase-admin==6.3.0  # Recommended alternative to Pyrebase for better support and maintenance
-python-jose==3.3.0  # If you need JWT support which is often used with Firebase
-google-cloud-firestore==2.7.2  # If using Firestore
-openai==0.19.0  # Assuming you are using the OpenAI Python client
+streamlit
+requests
+firebase-admin
+python-jose
+google-cloud-firestore
+openai
