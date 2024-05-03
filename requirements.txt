@@ -8,3 +8,4 @@ firebase-admin
 python-jose
 google-cloud-firestore
 openai
+pyrebase4
