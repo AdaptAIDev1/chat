@@ -4,7 +4,6 @@ import pyrebase
 from openai import OpenAI
 
 # Configure Firebase
-
 firebase_config = {
     "apiKey": "AIzaSyAL9L7uLqlO2Z2RVny6uFAr4j72ix2LoI8",
     "authDomain": "streamlit-test-5ff43.firebaseapp.com",
@@ -28,8 +27,7 @@ def fetch_models():
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            # Extract model names and only take the first part before the colon
-            models = [model["model"].split(':')[0] for model in data.get("models", [])]
+            models = [model["model"] for model in data.get("models", [])]
             return models
         else:
             return ["Error: Could not retrieve models - HTTP Status " + str(response.status_code)]
@@ -61,7 +59,7 @@ st.set_option('deprecation.showPyplotGlobalUse', False)
 def send_prompt_to_local_llm(prompt, model_name):
     url = "http://199.204.135.71:11434/api/generate"
     payload = {
-        "model": model_name,  # Dynamically set the model based on user selection
+        "model": model_name,
         "prompt": prompt,
         "stream": False
     }
@@ -70,28 +68,41 @@ def send_prompt_to_local_llm(prompt, model_name):
         if response.status_code == 200:
             response_data = response.json()
             if 'response' in response_data:
-                return response_data['response']
+                return response_data['response'], model_name
             else:
-                return "Response key is missing in the API response."
+                return "Response key is missing in the API response.", model_name
         else:
-            return f"Error: {response.status_code} - {response.text}"
+            error_message = f"Error: {response.status_code} - {response.json().get('error', response.text)}"
+            return error_message, model_name
     except requests.RequestException as e:
-        return f"Error sending POST request: {e}"        
+        return f"Error sending POST request: {e}", model_name
 
 def main():
-    # Display logo if available
     logo_path = "logo.png"
     st.sidebar.image(logo_path, width=300, use_column_width=True)
 
     if 'user' in st.session_state:
         st.sidebar.text("Logged in as: {}".format(st.session_state['user']['email']))
-        # Fetch available models from endpoint
-        models = fetch_models()
-        selected_model = st.sidebar.selectbox("Select Language Model", models)
+        
+        # Fetch models only once and store in session state
+        if 'models' not in st.session_state:
+            st.session_state['models'] = fetch_models()
+        
+        models = st.session_state['models']
+        
+        if 'selected_model' not in st.session_state:
+            st.session_state['selected_model'] = models[0]
+        
+        selected_model = st.sidebar.selectbox(
+            "Select Language Model",
+            models,
+            index=models.index(st.session_state['selected_model'])
+        )
+        
+        st.session_state['selected_model'] = selected_model
         logout()
     else:
         login()
-
 
     if 'user' in st.session_state:
         if "messages" not in st.session_state:
@@ -108,7 +119,11 @@ def main():
 
             with st.spinner("Processing..."):
                 # Call local LLM function
-                response = send_prompt_to_local_llm(prompt, selected_model)
+                response, model_name = send_prompt_to_local_llm(prompt, st.session_state['selected_model'])
+                if response.startswith("Error:"):
+                    st.error(response)
+                else:
+                    response += f" (Response created by: {model_name})"
 
             with st.chat_message("assistant"):
                 st.markdown(response)
