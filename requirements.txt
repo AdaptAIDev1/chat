@@ -9,6 +9,9 @@ urllib3==1.26.5
 pyrebase4==4.3.0
 six==1.15.0
 python-dateutil==2.8.2
-pymongo
+pymongo==4.3.3
 requests-toolbelt==0.9.1
-openai
+openai==0.27.6
+sentence-transformers==2.2.2
+langchain==0.0.159
+firecrawl-py
