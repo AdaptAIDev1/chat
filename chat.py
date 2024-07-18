@@ -1,7 +1,6 @@
 import streamlit as st
 import pyrebase
 import requests
-from openai import OpenAI
 from utils import load_instructions, send_prompt_to_api
 import json
 
@@ -21,9 +20,6 @@ firebase_config = {
 
 firebase = pyrebase.initialize_app(firebase_config)
 auth = firebase.auth()
-
-# Set up the client for OpenAI
-client = OpenAI(base_url="https://api.groq.com/openai/v1/", api_key="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")
 
 def login():
     username = st.sidebar.text_input("Email")
@@ -130,8 +126,6 @@ def main():
                 response, model_name = send_prompt_to_api(prompt, st.session_state['selected_model'])
                 if response.startswith("Error:"):
                     st.error(response)
-                else:
-                    response += f" (Response created by: {model_name})"
 
             with st.chat_message("assistant"):
                 st.markdown(response)

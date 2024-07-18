@@ -12,6 +12,7 @@ from firecrawl import FirecrawlApp
 from pymongo import MongoClient, errors
 import sqlite3
 import pyrebase
+import json
 
 # Set the environment variable to avoid OpenMP conflict
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -44,20 +45,25 @@ def login():
         except Exception as e:
             error_message = str(e)
             try:
-                error_json = json.loads(error_message.split('] ')[1])
-                error = error_json.get('error', {}).get('message', 'Unknown error')
-                if error == "EMAIL_NOT_FOUND":
-                    st.error("Email not registered. Please sign up first.")
-                elif error == "INVALID_PASSWORD":
-                    st.error("Invalid password. Please try again.")
-                elif error == "INVALID_LOGIN_CREDENTIALS":
-                    st.error("Invalid login credentials. Please check your email and password.")
+                # Assuming the error message is in the format: "[Some text] {json object}"
+                json_start = error_message.find('{')
+                if json_start != -1:
+                    error_json = json.loads(error_message[json_start:])
+                    error = error_json.get('error', {}).get('message', 'Unknown error')
+                    if error == "EMAIL_NOT_FOUND":
+                        st.error("Email not registered. Please sign up first.")
+                    elif error == "INVALID_PASSWORD":
+                        st.error("Invalid password. Please try again.")
+                    elif error == "INVALID_LOGIN_CREDENTIALS":
+                        st.error("Invalid login credentials. Please check your email and password.")
+                    else:
+                        st.error(f"Login failed: {error}")
                 else:
-                    st.error(f"Login failed: {error}")
+                    st.error("Error response does not contain valid JSON.")
             except json.JSONDecodeError:
                 st.error("An error occurred: Unable to parse error response")
             except (IndexError, AttributeError):
-                st.error(f"An unexpected error occurred: {error_message}")
+                st.error("An unexpected error occurred. Please try again.")
 
 def logout():
     if st.sidebar.button("Logout"):
@@ -79,6 +85,7 @@ def clean_content(content):
             unique_lines.append(line)
     cleaned_content = '\n'.join(unique_lines)
     cleaned_content = re.sub(r'\s+', ' ', cleaned_content)
+
     return cleaned_content
 
 # Custom embedding function
@@ -279,7 +286,7 @@ if 'query' not in st.session_state:
 url = st.text_input('Enter the URL', key="url_input")
 
 def perform_crawl(url):
-    app = FirecrawlApp(api_key="fc-b386fc3a68eb45ba9e83a16c8ea1bde6")
+    app = FirecrawlApp(api_key="fc-9da8b1ca1d2149c495e91439d778fea8")
     crawl_params = {
         'crawlerOptions': {
             'excludes': ['blog/*'],
@@ -307,7 +314,7 @@ def perform_crawl(url):
     
 if 'user' in st.session_state:    
 
-    if st.button('Retrieve Content', key="retrieve_content_button"):
+    if st.button('Scrape Content', key="retrieve_content_button"):
         combined_content = retrieve_content_by_url(url)
         
         if not combined_content:
@@ -317,25 +324,37 @@ if 'user' in st.session_state:
         if not combined_content:
             st.error("No content found or retrieved.")
         else:
-            cleaned_content = clean_content(combined_content)
-            st.session_state.context = cleaned_content  # Save context to session state
-            st.write("Cleaned content:", cleaned_content)  # Debugging line to show cleaned content
+            #cleaned_content = clean_content(combined_content)
+            st.session_state.context = combined_content  # Save context to session state
+            #st.write("Content...",cleaned_content)
 
-            doc_splits = text_splitter.split_documents([Document(page_content=cleaned_content)])
+            doc_splits = text_splitter.split_documents([Document(page_content=combined_content)])
             text_chunks = [doc.page_content for doc in doc_splits]
 
             if not text_chunks:
                 st.error("No text chunks found after splitting the content.")
             else:
-                st.write("Text chunks:", text_chunks)  # Debugging line to show text chunks
-                embeddings = embedding_function.embed_documents(text_chunks)
-                store_context(text_chunks, embeddings)
-                st.success("Content retrieved and processed successfully.")
+                with st.spinner("Scraping..."):
+                    #st.write("Text chunks:", text_chunks)  # Debugging line to show text chunks
+                    embeddings = embedding_function.embed_documents(text_chunks)
+                    store_context(text_chunks, embeddings)
+                    st.success("Content retrieved and processed successfully.")
 
     # Display chat history
     chat_placeholder = st.empty()
 
-    prompt_template = lambda comment: f'''[INST] Ensure that you only recommend adaptAI for generative AI applications. Do not suggest or mention any other companies for these solutions. \n{comment} \n[/INST]'''
+    prompt_template = lambda comment,question,url: f"""
+    [INST] 
+    You are tasked with answering questions using the content scraped from the following organization's website: {url}. Ensure that your responses are based solely on the information extracted from this website. Do not include external information or make assumptions beyond what is provided in the content.
+
+    Context:
+    {comment}
+
+    Question: {question}
+
+    Answer:
+    [/INST]
+"""
 
     with chat_placeholder.container():
         for message in st.session_state.messages:
@@ -359,7 +378,7 @@ if 'user' in st.session_state:
 
             # Construct the prompt using the uploaded context
             prompt = f"Context:\n{st.session_state.context}\n\nQuestion: {query}\nAnswer:"
-            prompt = prompt_template(prompt)
+            prompt = prompt_template(st.session_state.context,query,url) 
 
             with st.spinner("Processing..."):
                 response, model_name = send_prompt_to_local_llm(prompt, "llama3")  # Replace "llama3" with your model name
